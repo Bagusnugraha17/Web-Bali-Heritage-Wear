@@ -1,0 +1,45 @@
+name: Deploy vps
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Upload to VPS (/tmp/web)
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          source: "./*"
+          target: "/tmp/web"
+          overwrite: true
+          rm: true
+
+      - name: Deploy to /var/www/html
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          script: |
+            sudo rsync -av --delete \
+              --exclude='.git/' \
+              --exclude='.github/' \
+              --exclude='README.md' \
+              /tmp/web/ /var/www/html/
+
+            sudo chown -R www-data:www-data /var/www/html
+            sudo find /var/www/html -type d -exec chmod 755 {} \;
+            sudo find /var/www/html -type f -exec chmod 644 {} \;
+
+            sudo systemctl reload apache2
